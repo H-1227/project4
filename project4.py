@@ -41,7 +41,7 @@ def rotl(x: int, n: int) -> int:
 
 
 class SM3Base:
-    """SM3算法基础实现"""
+    # SM3算法基础实现
 
     def __init__(self):
         # 初始向量
@@ -51,7 +51,7 @@ class SM3Base:
         ]
 
     def _padding(self, message: bytes) -> bytes:
-        """消息填充"""
+
         length = len(message) * 8  # 消息长度(比特)
         message += b'\x80'  # 添加10000000
 
@@ -64,7 +64,7 @@ class SM3Base:
         return message
 
     def _message_extension(self, b: bytes) -> tuple[list[int], list[int]]:
-        """消息扩展"""
+
         # 将512比特消息块分为16个32比特字
         w = [int.from_bytes(b[i:i + 4], byteorder='big') for i in range(0, 64, 4)]
 
@@ -81,8 +81,7 @@ class SM3Base:
         return w, w1
 
     def _compress(self, v: List[int], b: bytes) -> List[int]:
-        """压缩函数"""
-        # 修复变量名冲突：将b改为b_val，避免覆盖参数b
+        # 压缩函数
         a, b_val, c, d, e, f, g, h = v
         w, w1 = self._message_extension(b)
 
@@ -113,7 +112,7 @@ class SM3Base:
             new_g = rotl(f, 19)
             new_h = g
 
-            # 更新当前轮状态（注意这里将b_val更新为new_b）
+            # 更新当前轮状态
             a, b_val, c, d, e, f, g, h = new_a, new_b, new_c, new_d, new_e, new_f, new_g, new_h
 
         # 与初始向量异或
@@ -129,7 +128,7 @@ class SM3Base:
         ]
 
     def hash(self, message: bytes) -> bytes:
-        """计算SM3哈希值"""
+        # 计算SM3哈希值
         # 消息填充
         padded = self._padding(message)
 
@@ -146,7 +145,6 @@ class SM3Base:
 
 
 class SM3Optimized1(SM3Base):
-    """SM3优化版本1：预计算常量和合并操作"""
 
     def __init__(self):
         super().__init__()
@@ -154,8 +152,6 @@ class SM3Optimized1(SM3Base):
         self.rotated_T = [rotl(SM3_T[j], j) for j in range(64)]
 
     def _compress(self, v: List[int], b: bytes) -> List[int]:
-        """优化的压缩函数：减少重复计算"""
-        # 修复变量名冲突
         a, b_val, c, d, e, f, g, h = v
         w, w1 = self._message_extension(b)
 
@@ -167,10 +163,12 @@ class SM3Optimized1(SM3Base):
 
             # 合并条件判断
             if j < 16:
-                f_val = b_val ^ c ^ d  # 使用b_val
+                f_val = b_val ^ c ^ d
+                # 使用b_val
                 g_val = e ^ f ^ g
             else:
-                f_val = (b_val & c) | (b_val & d) | (c & d)  # 使用b_val
+                f_val = (b_val & c) | (b_val & d) | (c & d)
+                # 使用b_val
                 g_val = (e & f) | ((~e) & g)
 
             t = (h + g_val + rotl(e, 12) + w1[j] + tt2) % 0x100000000
@@ -191,7 +189,8 @@ class SM3Optimized1(SM3Base):
 
         return [
             (a ^ v[0]) % 0x100000000,
-            (b_val ^ v[1]) % 0x100000000,  # 使用b_val
+            (b_val ^ v[1]) % 0x100000000,
+            # 使用b_val
             (c ^ v[2]) % 0x100000000,
             (d ^ v[3]) % 0x100000000,
             (e ^ v[4]) % 0x100000000,
@@ -202,13 +201,11 @@ class SM3Optimized1(SM3Base):
 
 
 class SM3Optimized2(SM3Optimized1):
-    """SM3优化版本2：使用numpy加速消息扩展和批量操作"""
 
     def __init__(self):
         super().__init__()
 
     def _message_extension(self, b: bytes) -> tuple[Any, list[int]]:
-        """使用numpy加速消息扩展"""
         # 将512比特消息块分为16个32比特字
         w = np.zeros(68, dtype=np.uint32)
         for i in range(16):
@@ -230,13 +227,11 @@ class SM3Optimized2(SM3Optimized1):
 
 
 class SM3Optimized3(SM3Optimized2):
-    """SM3优化版本3：块处理优化和预计算更多值"""
 
     def __init__(self):
         super().__init__()
 
     def hash(self, message: bytes) -> bytes:
-        """优化的哈希函数：处理大消息时减少内存分配"""
         length = len(message)
         # 预先计算需要的块数
         block_count = (length + 8 + 63) // 64  # 填充后总块数
@@ -317,7 +312,7 @@ Tuple[bytes, bytes]:
 
 
 class MerkleTreeRFC6962:
-    """基于RFC6962的Merkle树实现"""
+    # 基于RFC6962的Merkle树实现
 
     def __init__(self, leaves: List[bytes], sm3_impl=SM3Optimized3):
         """
@@ -330,17 +325,14 @@ class MerkleTreeRFC6962:
         self.root = self.tree[0][0] if self.tree else b''
 
     def _hash_leaf(self, data: bytes) -> bytes:
-        """计算叶子节点的哈希（RFC6962格式）"""
         # 叶子节点前缀：0x00
         return self.sm3.hash(b'\x00' + data)
 
     def _hash_internal(self, left: bytes, right: bytes) -> bytes:
-        """计算内部节点的哈希（RFC6962格式）"""
         # 内部节点前缀：0x01
         return self.sm3.hash(b'\x01' + left + right)
 
     def _build_tree(self) -> List[List[bytes]]:
-        """构建Merkle树"""
         if not self.leaves:
             return []
 
@@ -497,7 +489,6 @@ class MerkleTreeRFC6962:
 
 
 def benchmark(impl_class, data_size: int = 10 * 1024 * 1024, iterations: int = 5) -> float:
-    """基准测试函数"""
     sm3 = impl_class()
     # 使用固定模式生成数据
     data = b"test_data_pattern" * (data_size // len(b"test_data_pattern") + 1)
@@ -519,7 +510,6 @@ def benchmark(impl_class, data_size: int = 10 * 1024 * 1024, iterations: int = 5
 
 
 def test_length_extension_attack():
-    """测试长度扩展攻击"""
     sm3 = SM3Optimized3()
     secret = b"secret_key"
     public_data = b"public_data"
@@ -550,7 +540,7 @@ def test_length_extension_attack():
 
 
 def test_merkle_tree(leaf_count: int = 100000):
-    """测试Merkle树实现"""
+    # 测试Merkle树
     print(f"测试{leaf_count}个叶子节点的Merkle树...")
 
     # 生成随机叶子节点（使用固定模式）
@@ -582,7 +572,6 @@ def test_merkle_tree(leaf_count: int = 100000):
 
 
 def main():
-    """主函数：运行测试和性能基准"""
     print("SM3算法实现与优化测试")
     print("=" * 50)
 
@@ -596,26 +585,25 @@ def main():
     assert base_hash == expected_hash, f"基础实现错误: {base_hash} != {expected_hash}"
     print("基础实现验证通过")
 
-    # 验证优化版本1
     sm3_opt1 = SM3Optimized1()
     opt1_hash = sm3_opt1.hash(test_message).hex()
     assert opt1_hash == expected_hash, f"优化版本1错误: {opt1_hash} != {expected_hash}"
-    print("优化版本1验证通过")
+    print("优化1验证通过")
 
     # 验证优化版本2
     sm3_opt2 = SM3Optimized2()
     opt2_hash = sm3_opt2.hash(test_message).hex()
     assert opt2_hash == expected_hash, f"优化版本2错误: {opt2_hash} != {expected_hash}"
-    print("优化版本2验证通过")
+    print("优化2验证通过")
 
     # 验证优化版本3
     sm3_opt3 = SM3Optimized3()
     opt3_hash = sm3_opt3.hash(test_message).hex()
     assert opt3_hash == expected_hash, f"优化版本3错误: {opt3_hash} != {expected_hash}"
-    print("优化版本3验证通过")
+    print("优化3验证通过")
 
     # 性能基准测试
-    print("\n性能基准测试 (10MB数据，5次平均):")
+    print("\n性能基准测试 (100MB数据，10次平均):")
     print(f"{'实现方式':<15} {'速度(MB/s)':<10}")
     print("-" * 30)
 
@@ -623,13 +611,13 @@ def main():
     print(f"{'基础实现':<15} {base_speed:<9.2f}")
 
     opt1_speed = benchmark(SM3Optimized1)
-    print(f"{'优化版本1':<15} {opt1_speed:<9.2f}")
+    print(f"{'优化1':<15} {opt1_speed:<9.2f}")
 
     opt2_speed = benchmark(SM3Optimized2)
-    print(f"{'优化版本2':<15} {opt2_speed:<9.2f}")
+    print(f"{'优化2':<15} {opt2_speed:<9.2f}")
 
     opt3_speed = benchmark(SM3Optimized3)
-    print(f"{'优化版本3':<15} {opt3_speed:<9.2f}")
+    print(f"{'优化3':<15} {opt3_speed:<9.2f}")
 
     # 测试长度扩展攻击
     print("\n测试长度扩展攻击:")
